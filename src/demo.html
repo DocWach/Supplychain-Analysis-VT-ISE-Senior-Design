@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Titanium Supply Chain Disruption Analyzer</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        background: #f0f2f5;
+        color: #1a1a2e;
+        line-height: 1.5;
+    }
+
+    /* Header */
+    .header {
+        background: linear-gradient(135deg, #861f41 0%, #4a0e23 100%);
+        color: white;
+        padding: 24px 32px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .header h1 { font-size: 22px; font-weight: 600; }
+    .header p { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+    .badge {
+        display: inline-block;
+        background: rgba(255,255,255,0.2);
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        margin-top: 8px;
+    }
+
+    /* Layout */
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .grid { display: grid; grid-template-columns: 340px 1fr; gap: 24px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+    /* Cards */
+    .card {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        overflow: hidden;
+    }
+    .card-header {
+        padding: 14px 20px;
+        font-weight: 600;
+        font-size: 14px;
+        border-bottom: 1px solid #e8e8e8;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .card-body { padding: 20px; }
+
+    /* Form */
+    label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    select, input[type="number"] {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d0d0d0;
+        border-radius: 6px;
+        font-size: 14px;
+        margin-bottom: 16px;
+        transition: border-color 0.2s;
+    }
+    select:focus, input:focus {
+        outline: none;
+        border-color: #861f41;
+        box-shadow: 0 0 0 3px rgba(134,31,65,0.1);
+    }
+    .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        font-size: 14px;
+    }
+    .checkbox-row input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: #861f41;
+    }
+    .btn {
+        width: 100%;
+        padding: 12px;
+        background: #861f41;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .btn:hover { background: #6d1835; }
+    .btn:active { transform: scale(0.98); }
+
+    /* Supplier Table */
+    .supplier-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .supplier-table th {
+        text-align: left;
+        padding: 8px 10px;
+        background: #f7f7f7;
+        font-weight: 600;
+        color: #555;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .supplier-table td { padding: 8px 10px; border-top: 1px solid #f0f0f0; }
+    .supplier-table tr:hover td { background: #fdf6f8; }
+    .status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+    }
+    .status-online { background: #27ae60; }
+    .status-offline { background: #e74c3c; }
+    .status-excluded { background: #f39c12; }
+
+    /* Results */
+    .results-area { display: flex; flex-direction: column; gap: 20px; }
+    .placeholder {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+    }
+    .placeholder-icon { font-size: 48px; margin-bottom: 12px; }
+
+    /* Strategy Card */
+    .strategy-card {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        overflow: hidden;
+        transition: box-shadow 0.2s;
+    }
+    .strategy-card.best { border-color: #27ae60; box-shadow: 0 0 0 2px rgba(39,174,96,0.2); }
+    .strategy-header {
+        padding: 12px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #fafafa;
+        border-bottom: 1px solid #e8e8e8;
+    }
+    .strategy-name { font-weight: 600; font-size: 14px; }
+    .strategy-badge {
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .badge-best { background: #e8f8f0; color: #1a9a5a; }
+    .badge-feasible { background: #e8f0f8; color: #2a6aaa; }
+    .badge-infeasible { background: #fde8e8; color: #c0392b; }
+    .strategy-body { padding: 16px; }
+    .metric-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        border-bottom: 1px solid #f5f5f5;
+        font-size: 13px;
+    }
+    .metric-row:last-child { border-bottom: none; }
+    .metric-label { color: #777; }
+    .metric-value { font-weight: 600; }
+
+    /* Allocation Bar */
+    .alloc-bar-container { margin-top: 12px; }
+    .alloc-bar-label { font-size: 11px; color: #777; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .alloc-bar {
+        display: flex;
+        height: 28px;
+        border-radius: 4px;
+        overflow: hidden;
+        background: #f0f0f0;
+    }
+    .alloc-segment {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 600;
+        color: white;
+        transition: width 0.4s ease;
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        padding: 0 4px;
+    }
+    .color-us { background: #3498db; }
+    .color-jp { background: #e67e22; }
+    .color-ru { background: #e74c3c; }
+    .color-cn { background: #9b59b6; }
+    .color-au { background: #27ae60; }
+
+    /* Notes */
+    .notes-section { margin-top: 12px; }
+    .note {
+        font-size: 12px;
+        padding: 4px 0;
+        color: #666;
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+    }
+    .note-icon { flex-shrink: 0; }
+
+    /* Comparison Summary */
+    .comparison-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+    .comparison-table th {
+        text-align: left;
+        padding: 10px;
+        background: #861f41;
+        color: white;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .comparison-table td {
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+    }
+    .comparison-table tr.highlight td { background: #f0faf5; font-weight: 600; }
+
+    /* LLM placeholder */
+    .llm-placeholder {
+        background: #fffbf0;
+        border: 1px dashed #e6c84d;
+        border-radius: 8px;
+        padding: 20px;
+        font-size: 13px;
+        color: #8a7520;
+        line-height: 1.6;
+    }
+    .llm-placeholder strong { color: #6b5a10; }
+
+    /* Pipeline diagram */
+    .pipeline {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        padding: 12px 0;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    .pipeline-step {
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
+        white-space: nowrap;
+    }
+    .pipeline-arrow {
+        font-size: 18px;
+        color: #bbb;
+        padding: 0 4px;
+    }
+    .step-input { background: #e8f4fd; color: #1a6a9a; border: 1px solid #b8daf0; }
+    .step-sim { background: #fef3e0; color: #9a6a1a; border: 1px solid #f0dab8; }
+    .step-llm { background: #f0e8fd; color: #6a1a9a; border: 1px solid #d8b8f0; }
+    .step-output { background: #e8fde8; color: #1a6a2a; border: 1px solid #b8f0b8; }
+    .step-disabled { background: #f0f0f0; color: #aaa; border: 1px dashed #ccc; }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Titanium Supply Chain Disruption Analyzer</h1>
+    <p>Virginia Tech ISE Senior Design &mdash; The Aerospace Corporation</p>
+    <span class="badge">Prototype Demo &mdash; Simulation Only (No LLM)</span>
+</div>
+
+<div class="container">
+
+    <!-- Pipeline Diagram -->
+    <div class="card" style="margin-bottom: 24px;">
+        <div class="card-header">System Pipeline</div>
+        <div class="card-body">
+            <div class="pipeline">
+                <div class="pipeline-step step-input">User Input</div>
+                <div class="pipeline-arrow">&#8594;</div>
+                <div class="pipeline-step step-sim">SimPy Simulation</div>
+                <div class="pipeline-arrow">&#8594;</div>
+                <div class="pipeline-step step-llm step-disabled">LLM Analysis (Week 5+)</div>
+                <div class="pipeline-arrow">&#8594;</div>
+                <div class="pipeline-step step-output">Recommendation</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid">
+
+        <!-- Left Panel: Controls -->
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+
+            <!-- Scenario Input -->
+            <div class="card">
+                <div class="card-header">
+                    <span>&#9881;</span> Disruption Scenario
+                </div>
+                <div class="card-body">
+                    <label>Disrupted Supplier</label>
+                    <select id="disruptedSupplier">
+                        <option value="">None (Baseline)</option>
+                        <option value="Titan-US">Titan-US (United States)</option>
+                        <option value="Titan-JP">Titan-JP (Japan)</option>
+                        <option value="Titan-RU" selected>Titan-RU (Russia)</option>
+                        <option value="Titan-CN">Titan-CN (China)</option>
+                        <option value="Titan-AU">Titan-AU (Australia)</option>
+                    </select>
+
+                    <label>Disruption Duration (weeks)</label>
+                    <input type="number" id="disruptionWeeks" value="12" min="1" max="52">
+
+                    <label>Order Quantity (kg)</label>
+                    <input type="number" id="orderQty" value="5000" min="100" max="50000" step="100">
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="qualifiedOnly" checked>
+                        <span>Aerospace-qualified suppliers only</span>
+                    </div>
+
+                    <button class="btn" onclick="runAnalysis()">Run Disruption Analysis</button>
+                </div>
+            </div>
+
+            <!-- Supplier Database -->
+            <div class="card">
+                <div class="card-header">
+                    <span>&#128203;</span> Supplier Database
+                </div>
+                <div class="card-body" style="padding: 0;">
+                    <table class="supplier-table" id="supplierTable">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Supplier</th>
+                                <th>Lead (wk)</th>
+                                <th>Cap (kg/wk)</th>
+                                <th>$/kg</th>
+                            </tr>
+                        </thead>
+                        <tbody id="supplierTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Results -->
+        <div class="results-area" id="resultsArea">
+            <div class="card">
+                <div class="card-body placeholder" id="placeholderMsg">
+                    <div class="placeholder-icon">&#9965;</div>
+                    <div>Configure a disruption scenario and click<br><strong>Run Disruption Analysis</strong> to see results.</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+// -------------------------------------------------------------------------
+// Supplier Data (mirrors supply_chain_sim.py DEFAULT_SUPPLIERS)
+// -------------------------------------------------------------------------
+const SUPPLIERS = [
+    { name: "Titan-US", region: "United States", leadTime: 4, capacity: 800,  cost: 32.00, quality: 0.95, qualified: true,  color: "color-us" },
+    { name: "Titan-JP", region: "Japan",         leadTime: 6, capacity: 1200, cost: 28.00, quality: 0.92, qualified: true,  color: "color-jp" },
+    { name: "Titan-RU", region: "Russia",        leadTime: 8, capacity: 2000, cost: 22.00, quality: 0.88, qualified: true,  color: "color-ru" },
+    { name: "Titan-CN", region: "China",         leadTime: 7, capacity: 1500, cost: 24.00, quality: 0.85, qualified: false, color: "color-cn" },
+    { name: "Titan-AU", region: "Australia",     leadTime: 5, capacity: 600,  cost: 35.00, quality: 0.90, qualified: true,  color: "color-au" },
+];
+
+const STRATEGIES = [
+    { key: "proportional",   label: "Proportional",   desc: "Split order by capacity share" },
+    { key: "cheapest_first", label: "Cheapest First",  desc: "Fill from lowest cost supplier" },
+    { key: "fastest_first",  label: "Fastest First",   desc: "Fill from shortest lead time" },
+];
+
+// -------------------------------------------------------------------------
+// Simulation Logic (mirrors supply_chain_sim.py)
+// -------------------------------------------------------------------------
+function allocateOrder(available, orderKg, strategy) {
+    const allocation = {};
+    const horizon = 12; // weeks
+
+    if (strategy === "cheapest_first") {
+        const sorted = [...available].sort((a, b) => a.cost - b.cost);
+        let remaining = orderKg;
+        for (const s of sorted) {
+            if (remaining <= 0) break;
+            const canSupply = s.capacity * horizon;
+            const take = Math.min(remaining, canSupply);
+            allocation[s.name] = take;
+            remaining -= take;
+        }
+    } else if (strategy === "fastest_first") {
+        const sorted = [...available].sort((a, b) => a.leadTime - b.leadTime);
+        let remaining = orderKg;
+        for (const s of sorted) {
+            if (remaining <= 0) break;
+            const canSupply = s.capacity * horizon;
+            const take = Math.min(remaining, canSupply);
+            allocation[s.name] = take;
+            remaining -= take;
+        }
+    } else { // proportional
+        const totalCap = available.reduce((sum, s) => sum + s.capacity, 0);
+        if (totalCap === 0) return allocation;
+        for (const s of available) {
+            const share = s.capacity / totalCap;
+            allocation[s.name] = Math.round(orderKg * share * 10) / 10;
+        }
+    }
+    return allocation;
+}
+
+function runScenario(disrupted, disruptionWeeks, orderKg, qualifiedOnly, strategy) {
+    const notes = [];
+    const available = [];
+
+    for (const s of SUPPLIERS) {
+        if (s.name === disrupted) {
+            notes.push({ type: "offline", text: `${s.name} (${s.region}) is OFFLINE for ${disruptionWeeks} weeks.` });
+            continue;
+        }
+        if (qualifiedOnly && !s.qualified) {
+            notes.push({ type: "excluded", text: `${s.name} (${s.region}) excluded -- not aerospace-qualified.` });
+            continue;
+        }
+        available.push(s);
+    }
+
+    if (available.length === 0) {
+        return {
+            strategy, available, allocation: {}, totalWeeks: 0,
+            totalCost: 0, suppliersUsed: [], feasible: false,
+            notes: [...notes, { type: "critical", text: "NO SUPPLIERS AVAILABLE. Order cannot be fulfilled." }]
+        };
+    }
+
+    const allocation = allocateOrder(available, orderKg, strategy);
+    const totalAllocated = Object.values(allocation).reduce((a, b) => a + b, 0);
+    const feasible = totalAllocated >= orderKg * 0.95;
+
+    if (!feasible) {
+        const shortfall = orderKg - totalAllocated;
+        notes.push({ type: "warning", text: `Shortfall of ${shortfall.toFixed(0)} kg. Available capacity cannot fully cover the order.` });
+    }
+
+    // Compute delivery times and costs
+    let maxWeeks = 0;
+    let totalCost = 0;
+    const suppliersUsed = [];
+    const deliveryDetails = {};
+
+    for (const [name, kg] of Object.entries(allocation)) {
+        if (kg <= 0) continue;
+        const supplier = available.find(s => s.name === name);
+        const prodWeeks = kg / supplier.capacity;
+        const actualWeeks = Math.max(supplier.leadTime, prodWeeks);
+        maxWeeks = Math.max(maxWeeks, actualWeeks);
+        const cost = kg * supplier.cost;
+        totalCost += cost;
+        suppliersUsed.push(name);
+        deliveryDetails[name] = { kg, weeks: Math.round(actualWeeks * 10) / 10, cost };
+    }
+
+    return {
+        strategy, available, allocation, deliveryDetails,
+        totalWeeks: Math.round(maxWeeks * 10) / 10,
+        totalCost: Math.round(totalCost * 100) / 100,
+        suppliersUsed, feasible, notes
+    };
+}
+
+// -------------------------------------------------------------------------
+// UI Rendering
+// -------------------------------------------------------------------------
+function renderSupplierTable() {
+    const disrupted = document.getElementById("disruptedSupplier").value;
+    const qualifiedOnly = document.getElementById("qualifiedOnly").checked;
+    const tbody = document.getElementById("supplierTableBody");
+
+    tbody.innerHTML = SUPPLIERS.map(s => {
+        let status, statusClass;
+        if (s.name === disrupted) {
+            status = "Offline"; statusClass = "status-offline";
+        } else if (qualifiedOnly && !s.qualified) {
+            status = "Excluded"; statusClass = "status-excluded";
+        } else {
+            status = "Online"; statusClass = "status-online";
+        }
+        return `<tr>
+            <td><span class="status-dot ${statusClass}"></span>${status}</td>
+            <td><strong>${s.name}</strong><br><span style="font-size:11px;color:#888;">${s.region}</span></td>
+            <td>${s.leadTime}</td>
+            <td>${s.capacity.toLocaleString()}</td>
+            <td>$${s.cost.toFixed(2)}</td>
+        </tr>`;
+    }).join("");
+}
+
+function renderAllocationBar(allocation, orderKg) {
+    const segments = SUPPLIERS
+        .filter(s => allocation[s.name] && allocation[s.name] > 0)
+        .map(s => {
+            const pct = (allocation[s.name] / orderKg) * 100;
+            const label = pct > 12 ? `${s.name} ${allocation[s.name].toLocaleString()}kg` : (pct > 6 ? `${s.name}` : "");
+            return `<div class="alloc-segment ${s.color}" style="width:${pct}%">${label}</div>`;
+        });
+    return `<div class="alloc-bar-container">
+        <div class="alloc-bar-label">Allocation</div>
+        <div class="alloc-bar">${segments.join("")}</div>
+    </div>`;
+}
+
+function renderNotes(notes) {
+    if (notes.length === 0) return "";
+    const icons = { offline: "&#128308;", excluded: "&#128992;", warning: "&#9888;", critical: "&#128680;" };
+    return `<div class="notes-section">${notes.map(n =>
+        `<div class="note"><span class="note-icon">${icons[n.type] || "&#8226;"}</span> ${n.text}</div>`
+    ).join("")}</div>`;
+}
+
+function runAnalysis() {
+    const disrupted = document.getElementById("disruptedSupplier").value;
+    const weeks = parseInt(document.getElementById("disruptionWeeks").value) || 12;
+    const orderKg = parseFloat(document.getElementById("orderQty").value) || 5000;
+    const qualifiedOnly = document.getElementById("qualifiedOnly").checked;
+
+    // Run all three strategies
+    const results = STRATEGIES.map(strat =>
+        ({ ...runScenario(disrupted, weeks, orderKg, qualifiedOnly, strat.key), meta: strat })
+    );
+
+    // Find best by cost among feasible
+    const feasibleResults = results.filter(r => r.feasible);
+    let bestIdx = -1;
+    if (feasibleResults.length > 0) {
+        const minCost = Math.min(...feasibleResults.map(r => r.totalCost));
+        bestIdx = results.findIndex(r => r.feasible && r.totalCost === minCost);
+    }
+
+    // Build results HTML
+    const area = document.getElementById("resultsArea");
+    let html = "";
+
+    // Comparison summary table
+    html += `<div class="card">
+        <div class="card-header"><span>&#128202;</span> Strategy Comparison</div>
+        <div class="card-body" style="padding:0; overflow-x:auto;">
+            <table class="comparison-table">
+                <tr>
+                    <th>Strategy</th>
+                    <th>Delivery (wk)</th>
+                    <th>Total Cost</th>
+                    <th>Suppliers</th>
+                    <th>Feasible</th>
+                </tr>
+                ${results.map((r, i) => `
+                    <tr class="${i === bestIdx ? 'highlight' : ''}">
+                        <td>${r.meta.label}${i === bestIdx ? ' &#9733;' : ''}</td>
+                        <td>${r.totalWeeks}</td>
+                        <td>$${r.totalCost.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                        <td>${r.suppliersUsed.join(", ") || "None"}</td>
+                        <td>${r.feasible ? "Yes" : "No"}</td>
+                    </tr>
+                `).join("")}
+            </table>
+        </div>
+    </div>`;
+
+    // Individual strategy cards
+    results.forEach((r, i) => {
+        const isBest = i === bestIdx;
+        const badgeClass = !r.feasible ? "badge-infeasible" : (isBest ? "badge-best" : "badge-feasible");
+        const badgeText = !r.feasible ? "Infeasible" : (isBest ? "Best Option" : "Feasible");
+
+        html += `<div class="strategy-card ${isBest ? 'best' : ''}">
+            <div class="strategy-header">
+                <div>
+                    <div class="strategy-name">${r.meta.label}</div>
+                    <div style="font-size:12px;color:#888;">${r.meta.desc}</div>
+                </div>
+                <span class="strategy-badge ${badgeClass}">${badgeText}</span>
+            </div>
+            <div class="strategy-body">
+                <div class="metric-row">
+                    <span class="metric-label">Total Delivery Time</span>
+                    <span class="metric-value">${r.totalWeeks} weeks</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Total Cost</span>
+                    <span class="metric-value">$${r.totalCost.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Cost per kg</span>
+                    <span class="metric-value">$${(r.totalCost / orderKg).toFixed(2)}</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Suppliers Used</span>
+                    <span class="metric-value">${r.suppliersUsed.length} of ${SUPPLIERS.length}</span>
+                </div>
+                ${renderAllocationBar(r.allocation, orderKg)}
+                ${renderNotes(r.notes)}
+            </div>
+        </div>`;
+    });
+
+    // LLM placeholder
+    html += `<div class="card">
+        <div class="card-header"><span>&#129302;</span> AI Analysis (Coming Week 5+)</div>
+        <div class="card-body">
+            <div class="llm-placeholder">
+                <strong>This is where the LLM analyst will go.</strong><br><br>
+                The simulation results above will be formatted as plain text and passed
+                to the language model as context. The LLM will then:<br><br>
+                1. Interpret the quantitative results in business terms<br>
+                2. Recommend a strategy with reasoning<br>
+                3. Identify risks not captured by the simulation<br>
+                4. Suggest contingency actions<br><br>
+                <strong>Simulated prompt context that would be sent:</strong><br>
+                <code style="display:block; margin-top:8px; padding:12px; background:#fff8e0; border-radius:4px; font-size:12px; white-space:pre-wrap; line-height:1.6;">${generatePromptContext(results, disrupted, weeks, orderKg)}</code>
+            </div>
+        </div>
+    </div>`;
+
+    area.innerHTML = html;
+    renderSupplierTable();
+}
+
+function generatePromptContext(results, disrupted, weeks, orderKg) {
+    let ctx = `Disruption Scenario: ${disrupted || "None (baseline)"}\n`;
+    ctx += `Disruption Duration: ${weeks} weeks\n`;
+    ctx += `Order Quantity: ${orderKg.toLocaleString()} kg titanium\n\n`;
+    ctx += `--- Simulation Results ---\n\n`;
+
+    results.forEach(r => {
+        ctx += `Strategy: ${r.meta.label}\n`;
+        ctx += `  Feasible: ${r.feasible ? "Yes" : "No"}\n`;
+        ctx += `  Delivery: ${r.totalWeeks} weeks\n`;
+        ctx += `  Cost: $${r.totalCost.toLocaleString(undefined, {minimumFractionDigits:2})}\n`;
+        ctx += `  Suppliers: ${r.suppliersUsed.join(", ") || "None"}\n`;
+        for (const [name, kg] of Object.entries(r.allocation)) {
+            if (kg > 0) ctx += `    - ${name}: ${kg.toLocaleString()} kg\n`;
+        }
+        ctx += `\n`;
+    });
+
+    ctx += `Based on these results, recommend the best allocation\nstrategy and explain your reasoning. Identify any risks\nnot captured by the simulation.`;
+    return ctx;
+}
+
+// -------------------------------------------------------------------------
+// Init
+// -------------------------------------------------------------------------
+document.getElementById("disruptedSupplier").addEventListener("change", renderSupplierTable);
+document.getElementById("qualifiedOnly").addEventListener("change", renderSupplierTable);
+renderSupplierTable();
+</script>
+
+</body>
+</html>

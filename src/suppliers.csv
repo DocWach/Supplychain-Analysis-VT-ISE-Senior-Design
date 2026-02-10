@@ -1,0 +1,6 @@
+name,region,lead_time_weeks,capacity_kg_per_week,cost_per_kg,quality_rating,is_qualified
+Titan-US,United States,4,800,32.00,0.95,true
+Titan-JP,Japan,6,1200,28.00,0.92,true
+Titan-RU,Russia,8,2000,22.00,0.88,true
+Titan-CN,China,7,1500,24.00,0.85,false
+Titan-AU,Australia,5,600,35.00,0.90,true
