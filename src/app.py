@@ -10,6 +10,7 @@ Run with:
 
 Requirements:
     pip install streamlit openai simpy
+    pip install ortools   (or scipy for LP optimizer fallback)
 """
 
 import streamlit as st
@@ -126,6 +127,18 @@ order_qty = st.sidebar.number_input(
     step=100,
 )
 
+# Optimizer status
+try:
+    from supply_chain_optimizer import get_solver_backend
+    _solver = get_solver_backend()
+    st.sidebar.markdown("### Optimizer")
+    st.sidebar.success(f"LP solver: **{_solver}**")
+    _optimizer_available = True
+except Exception:
+    st.sidebar.markdown("### Optimizer")
+    st.sidebar.warning("No LP solver (install ortools or scipy)")
+    _optimizer_available = False
+
 st.sidebar.markdown("---")
 st.sidebar.markdown(
     "<div style='font-size:11px; color:#888;'>"
@@ -139,6 +152,32 @@ st.sidebar.markdown(
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Strategy Name Helpers
+# ---------------------------------------------------------------------------
+
+_STRATEGY_LABELS = {
+    "proportional": "Proportional",
+    "cheapest_first": "Cheapest First",
+    "fastest_first": "Fastest First",
+    "optimal_cost": "Optimal (Min Cost)",
+    "optimal_time": "Optimal (Min Time)",
+    "optimal_balanced": "Optimal (Balanced)",
+}
+
+
+def _strategy_label(result) -> str:
+    """Extract a clean display name from a ScenarioResult."""
+    raw = result.scenario_name.split("[")[-1].rstrip("]") if "[" in result.scenario_name else ""
+    return _STRATEGY_LABELS.get(raw, raw or "Strategy")
+
+
+def _is_optimal(result) -> bool:
+    """Return True if this result used an LP-optimized strategy."""
+    raw = result.scenario_name.split("[")[-1].rstrip("]") if "[" in result.scenario_name else ""
+    return raw.startswith("optimal_")
+
 
 tab_pipeline, tab_manual, tab_suppliers, tab_about = st.tabs([
     "Full Pipeline",
@@ -321,40 +360,53 @@ with tab_pipeline:
         # Simulation comparison
         st.markdown("### Simulation Results")
 
-        # Find best strategy (lowest cost among feasible)
-        feasible = [r for r in sim_results if r.feasible]
-        best_idx = -1
-        if feasible:
+        heuristic_results = [r for r in sim_results if not _is_optimal(r)]
+        optimal_results = [r for r in sim_results if _is_optimal(r)]
+
+        # Find best in each group (lowest cost among feasible)
+        def _best_index(results_list):
+            feasible = [r for r in results_list if r.feasible]
+            if not feasible:
+                return -1
             min_cost = min(r.total_cost_usd for r in feasible)
-            for i, r in enumerate(sim_results):
+            for i, r in enumerate(results_list):
                 if r.feasible and r.total_cost_usd == min_cost:
-                    best_idx = i
-                    break
+                    return i
+            return -1
 
-        strategy_cols = st.columns(len(sim_results))
-        for i, (col, result) in enumerate(zip(strategy_cols, sim_results)):
-            with col:
-                strategy_name = result.scenario_name.split("[")[-1].rstrip("]") if "[" in result.scenario_name else "Strategy"
-                is_best = i == best_idx
+        def _render_strategy_cards(results_list, best_idx, qty):
+            cols = st.columns(len(results_list))
+            for i, (col, result) in enumerate(zip(cols, results_list)):
+                with col:
+                    label = _strategy_label(result)
+                    is_best = i == best_idx
 
-                if is_best:
-                    st.success(f"**{strategy_name}** — Best Option")
-                elif result.feasible:
-                    st.info(f"**{strategy_name}**")
-                else:
-                    st.error(f"**{strategy_name}** — Infeasible")
+                    if is_best:
+                        st.success(f"**{label}** — Best")
+                    elif result.feasible:
+                        st.info(f"**{label}**")
+                    else:
+                        st.error(f"**{label}** — Infeasible")
 
-                st.metric("Delivery", f"{result.total_delivery_weeks} weeks")
-                st.metric("Total Cost", f"${result.total_cost_usd:,.2f}")
-                st.metric("Cost/kg", f"${result.total_cost_usd / order_qty:.2f}")
-                st.metric("Suppliers", f"{len(result.suppliers_used)}")
+                    st.metric("Delivery", f"{result.total_delivery_weeks} weeks")
+                    st.metric("Total Cost", f"${result.total_cost_usd:,.2f}")
+                    st.metric("Cost/kg", f"${result.total_cost_usd / qty:.2f}")
+                    st.metric("Suppliers", f"{len(result.suppliers_used)}")
 
-                # Allocation breakdown
-                if result.allocation:
-                    st.caption("Allocation:")
-                    for name, kg in result.allocation.items():
-                        pct = (kg / order_qty) * 100
-                        st.progress(pct / 100, text=f"{name}: {kg:,.0f} kg ({pct:.0f}%)")
+                    if result.allocation:
+                        st.caption("Allocation:")
+                        for name, kg in result.allocation.items():
+                            pct = (kg / qty) * 100
+                            st.progress(pct / 100, text=f"{name}: {kg:,.0f} kg ({pct:.0f}%)")
+
+        # Heuristic strategies
+        st.markdown("#### Heuristic Strategies")
+        _render_strategy_cards(heuristic_results, _best_index(heuristic_results), order_qty)
+
+        # Optimal strategies (if available)
+        if optimal_results:
+            st.markdown("#### LP-Optimized Strategies")
+            _render_strategy_cards(optimal_results, _best_index(optimal_results), order_qty)
 
         # Notes
         all_notes = []
@@ -448,10 +500,12 @@ with tab_manual:
             best_cost = min((r.total_cost_usd for r in feasible_results), default=None)
 
             for r in results:
-                strategy = r.scenario_name.split("[")[-1].rstrip("]") if "[" in r.scenario_name else r.scenario_name
+                label = _strategy_label(r)
+                group = "Optimal" if _is_optimal(r) else "Heuristic"
                 is_best = r.feasible and r.total_cost_usd == best_cost
                 table_data.append({
-                    "Strategy": f"{'* ' if is_best else ''}{strategy}",
+                    "Strategy": f"{'* ' if is_best else ''}{label}",
+                    "Type": group,
                     "Delivery (wk)": r.total_delivery_weeks,
                     "Cost ($)": f"${r.total_cost_usd:,.2f}",
                     "$/kg": f"${r.total_cost_usd / manual_order_qty:.2f}",
@@ -464,8 +518,8 @@ with tab_manual:
 
             # Detailed cards
             for r in results:
-                strategy = r.scenario_name.split("[")[-1].rstrip("]") if "[" in r.scenario_name else r.scenario_name
-                with st.expander(f"{strategy} — ${r.total_cost_usd:,.2f} / {r.total_delivery_weeks} wk"):
+                label = _strategy_label(r)
+                with st.expander(f"{label} — ${r.total_cost_usd:,.2f} / {r.total_delivery_weeks} wk"):
                     st.text(format_result_summary(r))
 
             # Optional: send to LLM if available
@@ -565,10 +619,15 @@ analysis to evaluate titanium supply chain disruptions.
 4. **Risk Assessment** — LLM evaluates risks not captured by the simulation
    (geopolitical, regulatory, concentration risk).
 
-**Allocation Strategies:**
+**Heuristic Allocation Strategies:**
 - **Proportional** — Split order by supplier capacity share
 - **Cheapest First** — Prioritize lowest-cost suppliers
 - **Fastest First** — Prioritize shortest lead-time suppliers
+
+**LP-Optimized Strategies** (powered by OR-Tools / SciPy):
+- **Optimal (Min Cost)** — Minimize total procurement cost
+- **Optimal (Min Time)** — Minimize allocation-weighted lead time
+- **Optimal (Balanced)** — Multi-objective: 60% cost + 40% lead time
 
 ---
 
@@ -589,8 +648,9 @@ analysis to evaluate titanium supply chain disruptions.
 | Component | Technology |
 |-----------|-----------|
 | Simulation | SimPy (Python) |
+| Optimization | OR-Tools / SciPy (LP solver) |
 | LLM Integration | OpenAI-compatible API |
-| Default Provider | Groq (Llama 3.3 70B) |
+| Default Model | Llama 3.1 |
 | UI Framework | Streamlit |
 | Language | Python 3.10+ |
 """)
