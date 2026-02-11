@@ -180,9 +180,24 @@ def _allocate_order(
         "proportional" — split by capacity share (default)
         "cheapest_first" — fill from lowest cost, then next cheapest
         "fastest_first" — fill from shortest lead time, then next fastest
+        "optimal_cost" — LP minimizing total cost (requires ortools or scipy)
+        "optimal_time" — LP minimizing weighted lead time
+        "optimal_balanced" — LP balancing cost and lead time
 
     Returns dict of supplier_name -> allocated_kg.
     """
+    # Optimal strategies: delegate to the LP solver
+    if strategy.startswith("optimal_"):
+        try:
+            from supply_chain_optimizer import optimal_allocate
+            objective = strategy.replace("optimal_", "min_", 1)
+            if objective == "min_balanced":
+                objective = "balanced"
+            return optimal_allocate(available_suppliers, order_quantity_kg, objective)
+        except ImportError:
+            # Fall back to proportional if optimizer not available
+            strategy = "proportional"
+
     allocation = {}
 
     if strategy == "cheapest_first":
@@ -341,12 +356,22 @@ def compare_strategies(
     disruption_weeks: int = 0,
     order_quantity_kg: float = 5000.0,
     qualified_only: bool = True,
+    include_optimal: bool = True,
 ) -> list[ScenarioResult]:
     """
-    Run the same disruption scenario under all three allocation strategies.
+    Run the same disruption scenario under all allocation strategies.
     Returns a list of ScenarioResult for easy comparison.
+
+    When include_optimal=True, adds LP-optimized strategies (requires
+    ortools or scipy).  Falls back gracefully if neither is installed.
     """
     strategies = ["proportional", "cheapest_first", "fastest_first"]
+    if include_optimal:
+        try:
+            import supply_chain_optimizer  # noqa: F401
+            strategies += ["optimal_cost", "optimal_time", "optimal_balanced"]
+        except ImportError:
+            pass
     results = []
     for strategy in strategies:
         result = run_disruption_scenario(
