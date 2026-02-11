@@ -1,0 +1,7 @@
+streamlit
+openai
+simpy
+ortools  # scipy works as a fallback LP solver if ortools is unavailable
+bert-score
+sentence-transformers
+scipy
